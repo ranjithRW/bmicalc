@@ -74,7 +74,7 @@ class BodyPainter extends CustomPainter {
 
   static const Color skinColor = Color(0xFFF2C299);
   static const Color hairColor = Color(0xFF632B11);
-  static const Color strokeColor = Color(0xFF261208); // The illustrative outline color
+  static const Color strokeColor = Color(0xFF261208);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -83,7 +83,6 @@ class BodyPainter extends CustomPainter {
     final fillOutfit = Paint()..color = outfitColor..style = PaintingStyle.fill;
     final fillShoes = Paint()..color = const Color(0xFF2A3142)..style = PaintingStyle.fill;
 
-    // Crisp black/dark outlines matching the reference design
     final outlinePaint = Paint()
       ..color = strokeColor
       ..style = PaintingStyle.stroke
@@ -94,10 +93,8 @@ class BodyPainter extends CustomPainter {
     final h = size.height;
     final centerX = size.width / 2;
 
-    // Controls overall horizontal fullness dynamically based on calculated BMI
     final widthFactor = mapRange(bmi, 14, 40, 0.70, 1.45);
 
-    // Dynamic vertical placement points
     final headRadius = h * 0.068;
     final headCenterY = h * 0.15 + headRadius;
     final neckTop = headCenterY + headRadius - 1;
@@ -106,16 +103,12 @@ class BodyPainter extends CustomPainter {
     final torsoBottom = h * 0.54;
     final legBottom = h * 0.88;
 
-    // Body responsive widths
     final shoulderWidth = h * (gender == Gender.female ? 0.16 : 0.19) * widthFactor;
     final waistWidth = h * 0.14 * widthFactor;
     final hipWidth = h * (gender == Gender.female ? 0.18 : 0.17) * widthFactor;
     final armLength = h * 0.22;
     final armThickness = h * 0.032;
 
-    // -------------------------------------------------------------------------
-    // 1. HAIR BACK (Female long hair dropped behind shoulders)
-    // -------------------------------------------------------------------------
     if (gender == Gender.female) {
       final hairBackPath = Path()
         ..moveTo(centerX, headCenterY - headRadius * 1.1)
@@ -132,13 +125,9 @@ class BodyPainter extends CustomPainter {
       canvas.drawPath(hairBackPath, outlinePaint);
     }
 
-    // -------------------------------------------------------------------------
-    // 2. SKIN ARMS & HANDS (Drawn integrated to avoid gaps)
-    // -------------------------------------------------------------------------
     final leftArmPath = Path()
       ..moveTo(centerX - shoulderWidth / 2, torsoTop + 2)
       ..lineTo(centerX - shoulderWidth / 2 - armLength, torsoTop + 5)
-      // Left Hand profile definition (thumb & fingers matching image_754ade)
       ..quadraticBezierTo(centerX - shoulderWidth / 2 - armLength - 12, torsoTop + 7,
                           centerX - shoulderWidth / 2 - armLength - 15, torsoTop + 9)
       ..quadraticBezierTo(centerX - shoulderWidth / 2 - armLength - 10, torsoTop + 14,
@@ -149,7 +138,6 @@ class BodyPainter extends CustomPainter {
     final rightArmPath = Path()
       ..moveTo(centerX + shoulderWidth / 2, torsoTop + 2)
       ..lineTo(centerX + shoulderWidth / 2 + armLength, torsoTop + 5)
-      // Right Hand profile definition
       ..quadraticBezierTo(centerX + shoulderWidth / 2 + armLength + 12, torsoTop + 7,
                           centerX + shoulderWidth / 2 + armLength + 15, torsoTop + 9)
       ..quadraticBezierTo(centerX + shoulderWidth / 2 + armLength + 10, torsoTop + 14,
@@ -162,12 +150,8 @@ class BodyPainter extends CustomPainter {
     canvas.drawPath(rightArmPath, fillSkin);
     canvas.drawPath(rightArmPath, outlinePaint);
 
-    // -------------------------------------------------------------------------
-    // 3. OUTFIT / TORSO JUMPSUIT
-    // -------------------------------------------------------------------------
     final outfitPath = Path();
     if (gender == Gender.female) {
-      // Sleeveless jumpsuit configuration
       outfitPath.moveTo(centerX - shoulderWidth * 0.35, torsoTop);
       outfitPath.quadraticBezierTo(centerX, torsoTop + 12, centerX + shoulderWidth * 0.35, torsoTop);
       outfitPath.lineTo(centerX + shoulderWidth * 0.45, torsoTop + armThickness);
@@ -178,7 +162,6 @@ class BodyPainter extends CustomPainter {
       outfitPath.quadraticBezierTo(centerX - shoulderWidth * 0.52, (torsoTop + torsoBottom) / 2, centerX - shoulderWidth * 0.45, torsoTop + armThickness);
       outfitPath.close();
     } else {
-      // Male crewneck top template
       outfitPath.moveTo(centerX - shoulderWidth * 0.5, torsoTop);
       outfitPath.quadraticBezierTo(centerX, torsoTop + 5, centerX + shoulderWidth * 0.5, torsoTop);
       outfitPath.lineTo(centerX + shoulderWidth * 0.5, torsoTop + armThickness * 1.2);
@@ -190,13 +173,9 @@ class BodyPainter extends CustomPainter {
     canvas.drawPath(outfitPath, fillOutfit);
     canvas.drawPath(outfitPath, outlinePaint);
 
-    // Waist Belt seam accent line 
     final seamY = torsoTop + (torsoBottom - torsoTop) * 0.65;
     canvas.drawLine(Offset(centerX - waistWidth * 0.48, seamY), Offset(centerX + waistWidth * 0.48, seamY), outlinePaint);
 
-    // -------------------------------------------------------------------------
-    // 4. NECK & HEAD (Drawn over torso for cleanly layered outlines)
-    // -------------------------------------------------------------------------
     final neckPath = Path()
       ..moveTo(centerX - h * 0.015, torsoTop + 3)
       ..lineTo(centerX - h * 0.015, neckTop)
@@ -206,12 +185,10 @@ class BodyPainter extends CustomPainter {
     canvas.drawPath(neckPath, fillSkin);
     canvas.drawPath(neckPath, outlinePaint);
 
-    // Head Oval base
     final headRect = Rect.fromCenter(center: Offset(centerX, headCenterY), width: headRadius * 1.8, height: headRadius * 2.0);
     canvas.drawOval(headRect, fillSkin);
     canvas.drawOval(headRect, outlinePaint);
 
-    // Hair Top/Cap
     final hairCapPath = Path()
       ..addArc(Rect.fromCenter(center: Offset(centerX, headCenterY - 3), width: headRadius * 1.86, height: headRadius * 2.05), 3.14, 3.14);
     if (gender == Gender.female) {
@@ -224,9 +201,6 @@ class BodyPainter extends CustomPainter {
     canvas.drawPath(hairCapPath, fillHair);
     canvas.drawPath(hairCapPath, outlinePaint);
 
-    // -------------------------------------------------------------------------
-    // 5. LEGS & PANTS
-    // -------------------------------------------------------------------------
     final legGap = (h * 0.016 * widthFactor).clamp(6.0, 22.0);
     final trouserWidth = (hipWidth / 2) - (legGap / 2);
 
@@ -240,14 +214,10 @@ class BodyPainter extends CustomPainter {
     canvas.drawRect(rightLegRect, pantsPaint);
     canvas.drawRect(rightLegRect, outlinePaint);
 
-    // Pocket line details for the jumpsuit
     final pocketY = torsoBottom + 8;
     canvas.drawLine(Offset(centerX - hipWidth / 2 + 3, pocketY), Offset(centerX - hipWidth / 2 + trouserWidth * 0.4, pocketY + 12), outlinePaint);
     canvas.drawLine(Offset(centerX + hipWidth / 2 - 3, pocketY), Offset(centerX + hipWidth / 2 - trouserWidth * 0.4, pocketY + 12), outlinePaint);
 
-    // -------------------------------------------------------------------------
-    // 6. SHOES
-    // -------------------------------------------------------------------------
     final shoeWidth = trouserWidth * 1.1;
     final shoeHeight = h * 0.026;
 
@@ -270,9 +240,6 @@ class BodyPainter extends CustomPainter {
     canvas.drawPath(rightShoePath, fillShoes);
     canvas.drawPath(rightShoePath, outlinePaint);
 
-    // -------------------------------------------------------------------------
-    // 7. GROUND DROP SHADOW
-    // -------------------------------------------------------------------------
     final shadowPaint = Paint()
       ..color = Colors.black.withOpacity(0.18)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
@@ -302,6 +269,7 @@ class _BmiHomePageState extends State<BmiHomePage> {
   Gender _gender = Gender.female;
   double? _bmi;
   double _targetBmi = 22;
+  double _weight = 0;
   bool _hasResult = false;
   String? _errorText;
 
@@ -337,6 +305,7 @@ class _BmiHomePageState extends State<BmiHomePage> {
     setState(() {
       _errorText = null;
       _bmi = bmi;
+      _weight = weight;
       _targetBmi = bmi;
       _hasResult = true;
     });
@@ -347,6 +316,7 @@ class _BmiHomePageState extends State<BmiHomePage> {
       _weightController.clear();
       _heightController.clear();
       _bmi = null;
+      _weight = 0;
       _hasResult = false;
       _errorText = null;
       _targetBmi = 22;
@@ -557,6 +527,9 @@ class _BmiHomePageState extends State<BmiHomePage> {
     final bmi = _bmi ?? 22;
     final category = categoryForBmi(bmi);
 
+    final computedCalories = (_weight * 30).round();
+    final computedProtein = (_weight * 1.6).round();
+
     return Column(
       key: key,
       children: [
@@ -605,7 +578,86 @@ class _BmiHomePageState extends State<BmiHomePage> {
         ),
         const SizedBox(height: 24),
         _buildBmiGauge(bmi),
+        const SizedBox(height: 28),
+        
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Recommended Daily Intake Target',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildIntakeCard(
+                title: 'Calories',
+                value: '$computedCalories',
+                unit: 'kcal',
+                icon: Icons.local_fire_department_rounded,
+                iconColor: const Color(0xFFF97316),
+                subtitle: 'Maintenance Target',
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _buildIntakeCard(
+                title: 'Protein',
+                value: '$computedProtein',
+                unit: 'g',
+                icon: Icons.fitness_center_rounded,
+                iconColor: const Color(0xFF3B82F6),
+                subtitle: 'Active Athlete Target',
+              ),
+            ),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _buildIntakeCard({
+    required String title,
+    required String value,
+    required String unit,
+    required IconData icon,
+    required Color iconColor,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13, fontWeight: FontWeight.w600)),
+              Icon(icon, color: iconColor, size: 20),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.white)),
+              const SizedBox(width: 3),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(unit, style: TextStyle(fontSize: 13, color: iconColor, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 10, fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 
