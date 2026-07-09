@@ -3,21 +3,61 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await _loadEnv();
   runApp(const BmiApp());
 }
 
 // -----------------------------------------------------------------------------
-// GEMINI API CONFIG
+// GEMINI API CONFIG — key is loaded at startup from the bundled .env file
 // -----------------------------------------------------------------------------
-// TODO: Paste your own key from https://aistudio.google.com/apikey
-// WARNING: Hardcoding a key like this is fine for local testing on your own
-// device, but anyone who decompiles the released app can extract it. For a
-// real production release, proxy this call through your own backend (e.g. a
-// small Cloud Function) so the key never ships inside the compiled app.
-const String geminiApiKey = 'PASTE_YOUR_GEMINI_API_KEY_HERE';
+// Your .env file should contain a line like:
+//   GEMINI_API_KEY=your_real_key_here
+//
+// Make sure pubspec.yaml lists .env as an asset:
+//   flutter:
+//     assets:
+//       - .env
+//
+// And make sure .env is listed in .gitignore so the key never gets committed.
+String geminiApiKey = '';
 const String geminiModel = 'gemini-2.5-flash';
+
+/// Reads the bundled .env asset and pulls out GEMINI_API_KEY=... .
+/// If the file is missing or the key isn't found, geminiApiKey stays empty
+/// and the UI shows a clear, actionable error instead of crashing.
+Future<void> _loadEnv() async {
+  try {
+    final content = await rootBundle.loadString('.env');
+    for (final rawLine in content.split('\n')) {
+      final line = rawLine.trim();
+      if (line.isEmpty || line.startsWith('#')) continue;
+
+      final eqIndex = line.indexOf('=');
+      if (eqIndex == -1) continue;
+
+      final key = line.substring(0, eqIndex).trim();
+      var value = line.substring(eqIndex + 1).trim();
+
+      // Strip surrounding quotes if the value was quoted in the .env file
+      if (value.length >= 2 &&
+          ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'")))) {
+        value = value.substring(1, value.length - 1);
+      }
+
+      if (key == 'GEMINI_API_KEY') {
+        geminiApiKey = value;
+      }
+    }
+  } catch (_) {
+    // .env not found / not declared as an asset / unreadable.
+    // geminiApiKey stays '' — _fetchHealthPlan() will surface a clear error.
+  }
+}
 
 class BmiApp extends StatelessWidget {
   const BmiApp({super.key});
@@ -358,9 +398,11 @@ class _BmiHomePageState extends State<BmiHomePage> {
   Future<void> _fetchHealthPlan() async {
     if (_bmi == null) return;
 
-    if (geminiApiKey == 'PASTE_YOUR_GEMINI_API_KEY_HERE' || geminiApiKey.isEmpty) {
+    if (geminiApiKey.isEmpty) {
       setState(() {
-        _planError = 'No Gemini API key set. Paste your key into the geminiApiKey constant at the top of main.dart.';
+        _planError = 'No Gemini API key found. Make sure your .env file has '
+            'a line like GEMINI_API_KEY=your_key, and that .env is listed '
+            'under flutter: assets: in pubspec.yaml.';
       });
       return;
     }
