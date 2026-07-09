@@ -1,8 +1,23 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 void main() {
   runApp(const BmiApp());
 }
+
+// -----------------------------------------------------------------------------
+// GEMINI API CONFIG
+// -----------------------------------------------------------------------------
+// TODO: Paste your own key from https://aistudio.google.com/apikey
+// WARNING: Hardcoding a key like this is fine for local testing on your own
+// device, but anyone who decompiles the released app can extract it. For a
+// real production release, proxy this call through your own backend (e.g. a
+// small Cloud Function) so the key never ships inside the compiled app.
+const String geminiApiKey = 'PASTE_YOUR_GEMINI_API_KEY_HERE';
+const String geminiModel = 'gemini-2.5-flash';
 
 class BmiApp extends StatelessWidget {
   const BmiApp({super.key});
@@ -273,6 +288,12 @@ class _BmiHomePageState extends State<BmiHomePage> {
   bool _hasResult = false;
   String? _errorText;
 
+  // ---- Gemini AI plan state ----
+  bool _isLoadingPlan = false;
+  String? _dietPlan;
+  String? _exercisePlan;
+  String? _planError;
+
   @override
   void dispose() {
     _weightController.dispose();
@@ -308,6 +329,10 @@ class _BmiHomePageState extends State<BmiHomePage> {
       _weight = weight;
       _targetBmi = bmi;
       _hasResult = true;
+      // Clear any previous AI plan since it belongs to the old numbers
+      _dietPlan = null;
+      _exercisePlan = null;
+      _planError = null;
     });
   }
 
@@ -320,7 +345,126 @@ class _BmiHomePageState extends State<BmiHomePage> {
       _hasResult = false;
       _errorText = null;
       _targetBmi = 22;
+      _dietPlan = null;
+      _exercisePlan = null;
+      _planError = null;
+      _isLoadingPlan = false;
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // GEMINI API CALL — pure dart:io/dart:convert/dart:async, no extra packages.
+  // ---------------------------------------------------------------------------
+  Future<void> _fetchHealthPlan() async {
+    if (_bmi == null) return;
+
+    if (geminiApiKey == 'PASTE_YOUR_GEMINI_API_KEY_HERE' || geminiApiKey.isEmpty) {
+      setState(() {
+        _planError = 'No Gemini API key set. Paste your key into the geminiApiKey constant at the top of main.dart.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingPlan = true;
+      _planError = null;
+      _dietPlan = null;
+      _exercisePlan = null;
+    });
+
+    HttpClient? client;
+    try {
+      final category = categoryForBmi(_bmi!);
+      final genderLabel = _gender == Gender.female ? 'female' : 'male';
+
+      final prompt =
+          'You are a certified nutrition and fitness assistant. A $genderLabel user '
+          'has a BMI of ${_bmi!.toStringAsFixed(1)}, which falls in the "$category" '
+          'category, at a weight of ${_weight.toStringAsFixed(1)} kg. Give practical, '
+          'safe, general-wellness suggestions — this is not medical advice, and you '
+          'should not diagnose any condition. Respond in EXACTLY this plain-text '
+          'format, with no markdown asterisks and no extra commentary before or after:\n\n'
+          'DIET:\n'
+          '- tip one\n'
+          '- tip two\n'
+          '- tip three\n'
+          '- tip four\n\n'
+          'EXERCISE:\n'
+          '- tip one\n'
+          '- tip two\n'
+          '- tip three\n'
+          '- tip four';
+
+      final uri = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent',
+      );
+
+      client = HttpClient();
+      final request = await client.postUrl(uri);
+      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+      request.headers.set('x-goog-api-key', geminiApiKey);
+      request.add(utf8.encode(jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+      })));
+
+      final response = await request.close().timeout(const Duration(seconds: 30));
+      final body = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode != 200) {
+        throw Exception('Gemini returned status ${response.statusCode}. ${_shortError(body)}');
+      }
+
+      final decoded = jsonDecode(body) as Map<String, dynamic>;
+      final candidates = decoded['candidates'] as List?;
+      if (candidates == null || candidates.isEmpty) {
+        throw Exception('Gemini returned no candidates. It may have blocked this prompt.');
+      }
+
+      final content = candidates.first['content'] as Map<String, dynamic>?;
+      final parts = content?['parts'] as List?;
+      final text = (parts != null && parts.isNotEmpty) ? (parts.first['text'] as String? ?? '') : '';
+
+      if (text.trim().isEmpty) {
+        throw Exception('Gemini returned an empty response.');
+      }
+
+      final dietMatch = RegExp(r'DIET:(.*?)(EXERCISE:|$)', dotAll: true).firstMatch(text);
+      final exerciseMatch = RegExp(r'EXERCISE:(.*)$', dotAll: true).firstMatch(text);
+
+      setState(() {
+        _dietPlan = dietMatch != null ? dietMatch.group(1)!.trim() : text.trim();
+        _exercisePlan = exerciseMatch != null ? exerciseMatch.group(1)!.trim() : '';
+        _isLoadingPlan = false;
+      });
+    } on SocketException {
+      setState(() {
+        _planError = 'No internet connection. Check your network and try again.';
+        _isLoadingPlan = false;
+      });
+    } on TimeoutException {
+      setState(() {
+        _planError = 'The request timed out. Try again.';
+        _isLoadingPlan = false;
+      });
+    } catch (e) {
+      setState(() {
+        _planError = e.toString().replaceFirst('Exception: ', '');
+        _isLoadingPlan = false;
+      });
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  String _shortError(String body) {
+    if (body.length <= 200) return body;
+    return '${body.substring(0, 200)}...';
   }
 
   @override
@@ -579,7 +723,7 @@ class _BmiHomePageState extends State<BmiHomePage> {
         const SizedBox(height: 24),
         _buildBmiGauge(bmi),
         const SizedBox(height: 28),
-        
+
         const Align(
           alignment: Alignment.centerLeft,
           child: Text(
@@ -613,7 +757,164 @@ class _BmiHomePageState extends State<BmiHomePage> {
             ),
           ],
         ),
+
+        _buildAiPlanSection(),
       ],
+    );
+  }
+
+  Widget _buildAiPlanSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 28),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'AI Diet & Exercise Plan',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
+            ),
+            if (!_isLoadingPlan)
+              TextButton.icon(
+                onPressed: _fetchHealthPlan,
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                icon: Icon(_dietPlan == null ? Icons.auto_awesome_rounded : Icons.refresh_rounded, size: 16, color: Colors.tealAccent),
+                label: Text(
+                  _dietPlan == null ? 'Generate' : 'Regenerate',
+                  style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingPlan)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 30),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(width: 26, height: 26, child: CircularProgressIndicator(color: Colors.tealAccent, strokeWidth: 2.5)),
+                SizedBox(height: 12),
+                Text('Asking Gemini for your plan...', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          )
+        else if (_planError != null)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_planError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12, height: 1.4))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.redAccent),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: _fetchHealthPlan,
+                    child: const Text('Retry', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (_dietPlan != null) ...[
+          _buildPlanCard('Diet Suggestions', Icons.restaurant_rounded, const Color(0xFF22C55E), _dietPlan!),
+          const SizedBox(height: 14),
+          _buildPlanCard('Exercise Suggestions', Icons.fitness_center_rounded, const Color(0xFF3B82F6), _exercisePlan ?? ''),
+          const SizedBox(height: 10),
+          Text(
+            'AI-generated general wellness suggestions — not medical advice.',
+            style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10),
+          ),
+        ] else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded, color: Colors.white38, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Tap "Generate" for a personalized diet & exercise plan powered by Gemini.',
+                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPlanCard(String title, IconData icon, Color color, String content) {
+    final lines = content
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .map((l) => l.replaceFirst(RegExp(r'^[-•*]\s*'), ''))
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (lines.isEmpty)
+            Text('No suggestions returned.', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12))
+          else
+            ...lines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Container(width: 5, height: 5, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(line, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4))),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
