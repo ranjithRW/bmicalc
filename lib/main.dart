@@ -374,6 +374,11 @@ class _BmiHomePageState extends State<BmiHomePage> {
       _exercisePlan = null;
       _planError = null;
     });
+
+    // Automatically fetch the AI diet & exercise plan for this BMI —
+    // no manual button needed. _fetchHealthPlan manages its own state
+    // (loading/error/result), so it's safe to fire-and-forget here.
+    _fetchHealthPlan();
   }
 
   void _reset() {
@@ -810,24 +815,9 @@ class _BmiHomePageState extends State<BmiHomePage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 28),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'AI Diet & Exercise Plan',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
-            ),
-            if (!_isLoadingPlan)
-              TextButton.icon(
-                onPressed: _fetchHealthPlan,
-                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
-                icon: Icon(_dietPlan == null ? Icons.auto_awesome_rounded : Icons.refresh_rounded, size: 16, color: Colors.tealAccent),
-                label: Text(
-                  _dietPlan == null ? 'Generate' : 'Regenerate',
-                  style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.w700, fontSize: 12),
-                ),
-              ),
-          ],
+        const Text(
+          'AI Diet & Exercise Plan',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
         ),
         const SizedBox(height: 12),
         if (_isLoadingPlan)
@@ -889,22 +879,7 @@ class _BmiHomePageState extends State<BmiHomePage> {
             style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10),
           ),
         ] else
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              children: [
-                const Icon(Icons.auto_awesome_rounded, color: Colors.white38, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Tap "Generate" for a personalized diet & exercise plan powered by Gemini.',
-                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox.shrink(),
       ],
     );
   }
